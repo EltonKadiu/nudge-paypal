@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nudge – the AI that chases invoices (politely)</title>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --card: #fff;
+        --ink: #1a2233;
+        --mut: #6b7488;
+        --line: #e3e8f0;
+        --blue: #0070ba;
+        --green: #1a9e5c;
+        --red: #d33a3a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          15px/1.45 system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 24px;
+        background: var(--card);
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      header h1 span {
+        color: var(--mut);
+        font-weight: 400;
+        font-size: 14px;
+        margin-left: 8px;
+      }
+      .clock {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--mut);
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 8px;
+        padding: 6px 12px;
+      }
+      button.primary {
+        background: var(--blue);
+        color: #fff;
+        border-color: var(--blue);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 16px;
+        padding: 16px 24px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .kpi small {
+        color: var(--mut);
+        display: block;
+      }
+      .kpi b {
+        font-size: 22px;
+      }
+      .kpi.red b {
+        color: var(--red);
+      }
+      .kpi.green b {
+        color: var(--green);
+      }
+      #grid {
+        height: 340px;
+        width: 100%;
+      }
+      .chip {
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .chip.paid {
+        background: #e3f6ec;
+        color: var(--green);
+      }
+      .chip.sent {
+        background: #e4f1fa;
+        color: var(--blue);
+      }
+      .chip.over {
+        background: #fde8e8;
+        color: var(--red);
+      }
+      .chip.other {
+        background: #eef0f4;
+        color: var(--mut);
+      }
+      #chat {
+        display: flex;
+        flex-direction: column;
+        height: 360px;
+      }
+      #log {
+        flex: 1;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 4px 2px;
+      }
+      .msg {
+        padding: 8px 12px;
+        border-radius: 12px;
+        max-width: 90%;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .msg.user {
+        align-self: flex-end;
+        background: var(--blue);
+        color: #fff;
+      }
+      .msg.bot {
+        align-self: flex-start;
+        background: #eef2f8;
+      }
+      .msg.err {
+        background: #fde8e8;
+        color: var(--red);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .row input {
+        flex: 1;
+        padding: 9px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font: inherit;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .chips button {
+        font-size: 13px;
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+      .prop {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        margin-top: 8px;
+      }
+      .prop .meta {
+        color: var(--mut);
+        font-size: 13px;
+      }
+      .prop .body {
+        white-space: pre-wrap;
+        margin: 6px 0;
+        font-size: 14px;
+        background: #f8f9fc;
+        padding: 8px;
+        border-radius: 8px;
+      }
+      .prop .actions {
+        display: flex;
+        gap: 8px;
+      }
+      #banner {
+        display: none;
+        margin: 12px 24px 0;
+        padding: 10px 14px;
+        background: #fde8e8;
+        color: var(--red);
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>
+        Nudge
+        <span
+          >an AI agent that chases invoices, politely, and asks you first</span
+        >
+      </h1>
+      <div class="clock">
+        <span id="clock">Demo clock: today</span>
+        <button id="plus7">+7 days</button><button id="reset">Reset</button>
+      </div>
+    </header>
+    <div id="banner"></div>
+    <main>
+      <section>
+        <div class="kpis">
+          <div class="card kpi"><small>Outstanding</small><b id="k1">–</b></div>
+          <div class="card kpi red"><small>Overdue</small><b id="k2">–</b></div>
+          <div class="card kpi green">
+            <small>Collected</small><b id="k3">–</b>
+          </div>
+        </div>
+        <div class="card"><div id="grid"></div></div>
+      </section>
+      <section>
+        <div class="card" id="chat">
+          <div id="log"></div>
+          <div class="chips" id="chips"></div>
+          <div class="row">
+            <input
+              id="input"
+              placeholder="e.g. Invoice Acme, billing@acme.com, $1200 for logo design, due in 14 days"
+            /><button class="primary" id="send">Send</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 16px">
+          <h3>Awaiting your approval</h3>
+          <div id="props">
+            <span style="color: var(--mut)">Nothing pending.</span>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script>
+      const $ = (s) => document.querySelector(s);
+      const UNPAID = new Set([
+        "SENT",
+        "UNPAID",
+        "PARTIALLY_PAID",
+        "PAYMENT_PENDING",
+      ]);
+      const PAID = new Set(["PAID", "MARKED_AS_PAID"]);
+      const money = (n, c) =>
+        new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: c || "USD",
+        }).format(n);
+      const api = async (path, opts = {}) => {
+        const r = await fetch("/api" + path, {
+          headers: { "Content-Type": "application/json" },
+          ...opts,
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || r.statusText);
+        return j;
+      };
+      const post = (path, body) =>
+        api(path, { method: "POST", body: JSON.stringify(body || {}) });
+      const showErr = (m) => {
+        const b = $("#banner");
+        b.textContent = m;
+        b.style.display = m ? "block" : "none";
+      };
+
+      if (agGrid.ModuleRegistry && agGrid.AllCommunityModule)
+        agGrid.ModuleRegistry.registerModules([agGrid.AllCommunityModule]);
+      const gridApi = agGrid.createGrid($("#grid"), {
+        columnDefs: [
+          { field: "number", headerName: "Invoice", width: 130 },
+          { field: "client", flex: 1, minWidth: 130 },
+          {
+            field: "amount",
+            width: 120,
+            type: "rightAligned",
+            valueFormatter: (p) => money(p.value, p.data.currency),
+          },
+          {
+            headerName: "Status",
+            width: 150,
+            valueGetter: (p) =>
+              p.data.daysOverdue > 0 ? "OVERDUE" : p.data.status,
+            cellRenderer: (p) => {
+              const s = document.createElement("span");
+              const d = p.data;
+              const cls =
+                d.daysOverdue > 0
+                  ? "over"
+                  : PAID.has(d.status)
+                    ? "paid"
+                    : UNPAID.has(d.status)
+                      ? "sent"
+                      : "other";
+              s.className = "chip " + cls;
+              s.textContent =
+                d.daysOverdue > 0
+                  ? `OVERDUE ${d.daysOverdue}d`
+                  : d.status.replace(/_/g, " ");
+              return s;
+            },
+          },
+          { field: "due", width: 115 },
+          { field: "reminders", headerName: "Nudges", width: 90 },
+          {
+            headerName: "",
+            width: 115,
+            sortable: false,
+            cellRenderer: (p) => {
+              if (!UNPAID.has(p.data.status)) return "";
+              const b = document.createElement("button");
+              b.textContent = "Mark paid";
+              b.style.padding = "2px 8px";
+              b.onclick = async () => {
+                b.disabled = true;
+                try {
+                  await post(`/invoices/${p.data.id}/mark-paid`);
+                  await refresh();
+                } catch (e) {
+                  showErr(e.message);
+                }
+              };
+              return b;
+            },
+          },
+        ],
+        defaultColDef: { sortable: true, resizable: true },
+        getRowId: (p) => p.data.id,
+        rowData: [],
+        autoSizeStrategy: { type: "fitGridWidth" },
+      });
+
+      const sum = (rows) => {
+        const m = {};
+        rows.forEach((r) => (m[r.currency] = (m[r.currency] || 0) + r.amount));
+        return (
+          Object.entries(m)
+            .map(([c, v]) => money(v, c))
+            .join(" · ") || money(0, "USD")
+        );
+      };
+
+      async function refresh() {
+        try {
+          const [rows, props, st] = await Promise.all([
+            api("/invoices"),
+            api("/proposals"),
+            api("/state"),
+          ]);
+          showErr("");
+          gridApi.setGridOption("rowData", rows);
+          $("#k1").textContent = sum(rows.filter((r) => UNPAID.has(r.status)));
+          $("#k2").textContent = sum(rows.filter((r) => r.daysOverdue > 0));
+          $("#k3").textContent = sum(rows.filter((r) => PAID.has(r.status)));
+          $("#clock").textContent = st.dayOffset
+            ? `Demo clock: +${st.dayOffset} days (simulated)`
+            : "Demo clock: today";
+          renderProps(props);
+        } catch (e) {
+          showErr(e.message);
+        }
+      }
+
+      function renderProps(props) {
+        const box = $("#props");
+        box.replaceChildren();
+        if (!props.length) {
+          const s = document.createElement("span");
+          s.style.color = "var(--mut)";
+          s.textContent = "Nothing pending.";
+          box.append(s);
+          return;
+        }
+        for (const p of props) {
+          const d = document.createElement("div");
+          d.className = "prop";
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = `${p.number} · ${p.client} · ${p.daysOverdue}d overdue · tone: ${p.tone}`;
+          const subj = document.createElement("b");
+          subj.textContent = p.subject;
+          const body = document.createElement("div");
+          body.className = "body";
+          body.textContent = p.message;
+          const act = document.createElement("div");
+          act.className = "actions";
+          const ok = document.createElement("button");
+          ok.className = "primary";
+          ok.textContent = "Approve & send via PayPal";
+          const no = document.createElement("button");
+          no.textContent = "Reject";
+          ok.onclick = async () => {
+            ok.disabled = no.disabled = true;
+            try {
+              await post(`/proposals/${p.id}/approve`);
+            } catch (e) {
+              showErr(e.message);
+            }
+            refresh();
+          };
+          no.onclick = async () => {
+            await post(`/proposals/${p.id}/reject`);
+            refresh();
+          };
+          act.append(ok, no);
+          d.append(meta, subj, body, act);
+          box.append(d);
+        }
+      }
+
+      const add = (text, cls) => {
+        const m = document.createElement("div");
+        m.className = "msg " + cls;
+        m.textContent = text;
+        $("#log").append(m);
+        $("#log").scrollTop = 1e9;
+        return m;
+      };
+      async function send(text) {
+        text = text.trim();
+        if (!text) return;
+        add(text, "user");
+        $("#input").value = "";
+        $("#send").disabled = true;
+        const wait = add("Working…", "bot");
+        try {
+          wait.textContent = (
+            (await post("/chat", { message: text })).reply || "(no reply)"
+          ).replace(/\*\*/g, "");
+        } catch (e) {
+          wait.textContent = e.message;
+          wait.classList.add("err");
+        }
+        $("#send").disabled = false;
+        refresh();
+      }
+      $("#send").onclick = () => send($("#input").value);
+      $("#input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") send(e.target.value);
+      });
+      for (const t of [
+        "Who owes me money?",
+        "Chase my overdue invoices",
+        "Summarize my cash flow",
+      ]) {
+        const b = document.createElement("button");
+        b.textContent = t;
+        b.onclick = () => send(t);
+        $("#chips").append(b);
+      }
+      $("#plus7").onclick = async () => {
+        await post("/clock", { add: 7 });
+        refresh();
+      };
+      $("#reset").onclick = async () => {
+        await post("/clock", { reset: true });
+        refresh();
+      };
+
+      add(
+        "Hi, I'm Nudge. Tell me who to invoice, or ask me to chase what's overdue. I'll always ask before sending a reminder.",
+        "bot",
+      );
+      refresh();
+    </script>
+  </body>
+</html>
